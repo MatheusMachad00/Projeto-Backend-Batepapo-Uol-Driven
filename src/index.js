@@ -53,7 +53,7 @@ app.post("/participants", async (req, res) => {
 		}
 
 		await db.collection("participants").insertOne({
-			name,
+			name: removeTags(name).trim(),
 			lastStatus: Date.now(),
 		})
 
@@ -65,6 +65,7 @@ app.post("/participants", async (req, res) => {
 			time: dayjs().locale("pt-br").format("HH:mm:ss"),
 		});
 
+		removeInactiveUsers();
 		res.sendStatus(201);
 		mongoClient.close();
 
@@ -125,8 +126,8 @@ app.post("/messages", async (req, res) => {
 
 		await db.collection("messages").insertOne({
 			from: user,
-			to: to,
-			text: text,
+			to: removeTags(to).trim(),
+			text: removeTags(text).trim(),
 			type: type,
 			time: dayjs().locale("pt-br").format("HH:mm:ss"),
 		});
@@ -173,6 +174,19 @@ app.post("/status", async (req, res) => {
 	}
 });
 
+app.delete("/messages/:idMsg", async (req, res) => {
+	try {
+		await mongoClient.connect();
+		const db = mongoClient.db("chat_uol");
+
+
+	} catch (error) {
+		res.status(500).send(error)
+		console.error(error);
+		mongoClient.close();
+	}
+});
+
 function removeInactiveUsers() {
 	setInterval(async () => {
 		try {
@@ -181,6 +195,32 @@ function removeInactiveUsers() {
 
 			const users = await db.collection("participants").find({}).toArray();
 
+			if (!users) {
+				return;
+			}
+
+			users.forEach(async (user) => {
+				if (Date.now - user.lastStatus > 10000) {
+					try {
+						await db.collection("participants").deleteOne({ name: user.name });
+
+						await db.collection("messages").insertOne({
+							from: user.name,
+							to: "Todos",
+							text: "saiu na sala...",
+							type: "status",
+							time: dayjs().locale("pt-br").format("HH:mm:ss"),
+						});
+
+						mongoClient.close();
+
+					} catch (error) {
+						res.status(400).send(error);
+						console.error(error);
+						mongoClient.close();
+					}
+				}
+			})
 
 		} catch (error) {
 			res.status(500).send(error);
@@ -190,8 +230,13 @@ function removeInactiveUsers() {
 	}, 15000);
 }
 
+function removeTags(str) {
+	if ((str===null) || (str===''))
+			return false;
+	else
+			str = str.toString();
+	return str.replace( /(<([^>]+)>)/ig, '');
+}
+
+
 app.listen(5000);
-
-
-
-
