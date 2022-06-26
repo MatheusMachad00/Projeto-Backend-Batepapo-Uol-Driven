@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import { MongoClient } from "mongodb";
+import { MongoClient, ObjectId } from "mongodb";
 import dotenv from 'dotenv';
 import dayjs from "dayjs";
 import joi from "joi";
@@ -23,6 +23,7 @@ app.get("/participants", async (_, res) => {
 		mongoClient.close();
 	} catch (error) {
 		res.status(500).send(error);
+		console.error(error);
 		mongoClient.close();
 	}
 });
@@ -81,11 +82,13 @@ app.get("/messages", async (_, res) => {
 		const db = mongoClient.db("chat_uol");
 
 		const messages = await db.collection("messages").find({}).toArray();
+
 		res.send(messages);
 		mongoClient.close();
 
 	} catch (error) {
 		res.status(500).send(error);
+		console.error(error);
 		mongoClient.close();
 	}
 });
@@ -133,6 +136,7 @@ app.post("/messages", async (req, res) => {
 
 	} catch (error) {
 		res.status(500).send(error);
+		console.error(error);
 		mongoClient.close();
 	}
 
@@ -143,16 +147,51 @@ app.post("/status", async (req, res) => {
 	try {
 		await mongoClient.connect();
 		const db = mongoClient.db("chat_uol");
+		const usersColection = db.collection("participants");
 
 		const user = req.headers.user;
 
+		const checkUser = await db.collection("participants").findOne({ name: user });
+
+		if (checkUser === null) {
+			res.sendStatus(404);
+			mongoClient.close();
+			return;
+		}
+
+		await usersColection.updateOne({
+			name: user
+		}, { $set: { lastStatus: Date.now() } })
+
+		res.sendStatus(200)
 		mongoClient.close();
+
 	} catch (error) {
-		
+		res.status(500).send(error)
+		console.error(error);
 		mongoClient.close();
 	}
 });
 
+function removeInactiveUsers() {
+	setInterval(async () => {
+		try {
+			await mongoClient.connect();
+			const db = mongoClient.db("chat_uol");
+
+			const users = await db.collection("participants").find({}).toArray();
 
 
-app.listen(5000); 
+		} catch (error) {
+			res.status(500).send(error);
+			console.error(error);
+			mongoClient.close();
+		}
+	}, 15000);
+}
+
+app.listen(5000);
+
+
+
+
