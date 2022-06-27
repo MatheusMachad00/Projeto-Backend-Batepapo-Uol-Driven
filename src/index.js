@@ -19,6 +19,7 @@ app.get("/participants", async (_, res) => {
 		const db = mongoClient.db("chat_uol");
 
 		const participants = await db.collection("participants").find({}).toArray();
+
 		res.send(participants);
 		mongoClient.close();
 	} catch (error) {
@@ -84,6 +85,7 @@ app.get("/messages", async (_, res) => {
 
 		const messages = await db.collection("messages").find({}).toArray();
 
+		
 		res.send(messages);
 		mongoClient.close();
 
@@ -164,6 +166,7 @@ app.post("/status", async (req, res) => {
 			name: user
 		}, { $set: { lastStatus: Date.now() } })
 
+		
 		res.sendStatus(200)
 		mongoClient.close();
 
@@ -178,6 +181,40 @@ app.delete("/messages/:idMsg", async (req, res) => {
 	try {
 		await mongoClient.connect();
 		const db = mongoClient.db("chat_uol");
+		const user = req.headers.user;
+		const { idMsg } = req.params;
+
+		const message = await db.collection("messages").findOne({ _id: new ObjectId(idMsg) });
+		console.log()
+		if(!message){
+			res.sendStatus(404);
+			return;
+		}
+
+		if(message.from !== user){
+			res.sendStatus(401);
+			return;
+		}
+
+		await db.collection("messages").deleteOne({ _id: new ObjectId(idMsg) });
+
+		res.sendStatus(200);
+		mongoClient.close();
+
+	} catch (error) {
+		res.status(500).send(error)
+		console.error(error);
+		mongoClient.close();
+	}
+});
+
+app.put("/messages/:idMsg", async (req, res) => {
+	try {
+		await mongoClient.connect();
+		const db = mongoClient.db("chat_uol");
+		const user = req.headers.user;
+		const { idMsg } = req.params;
+
 
 
 	} catch (error) {
@@ -200,7 +237,7 @@ function removeInactiveUsers() {
 			}
 
 			users.forEach(async (user) => {
-				if (Date.now - user.lastStatus > 10000) {
+				if ((Date.now() - parseInt(user.lastStatus)) > 10000) {
 					try {
 						await db.collection("participants").deleteOne({ name: user.name });
 
@@ -215,7 +252,7 @@ function removeInactiveUsers() {
 						mongoClient.close();
 
 					} catch (error) {
-						res.status(400).send(error);
+						/* res.status(400).send(error); */
 						console.error(error);
 						mongoClient.close();
 					}
