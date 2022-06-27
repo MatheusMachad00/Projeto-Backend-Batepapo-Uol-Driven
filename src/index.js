@@ -4,6 +4,7 @@ import { MongoClient, ObjectId } from "mongodb";
 import dotenv from 'dotenv';
 import dayjs from "dayjs";
 import joi from "joi";
+import chalk from 'chalk'
 
 const app = express();
 app.use(cors());
@@ -13,6 +14,48 @@ dotenv.config();
 const mongoClient = new MongoClient(process.env.URL_MONGO);
 let db;
 
+setInterval(async () => {
+	try {
+		await mongoClient.connect();
+		const db = mongoClient.db("chat_uol");
+
+		const users = await db.collection("participants").find({}).toArray();
+
+		if (!users) {
+			return;
+		}
+
+		users.forEach(async (user) => {
+			if ((Date.now() - parseInt(user.lastStatus)) > 10000) {
+				try {
+					await db.collection("participants").deleteOne({ name: user.name });
+
+					await db.collection("messages").insertOne({
+						from: user.name,
+						to: "Todos",
+						text: "saiu na sala...",
+						type: "status",
+						time: dayjs().locale("pt-br").format("HH:mm:ss"),
+					});
+
+					console.log(chalk.red.bold(`usuário ${user.name} kickado`));
+					mongoClient.close();
+
+				} catch (error) {
+					/* res.status(400).send(error); */
+					console.error(error);
+					mongoClient.close();
+				}
+			}
+		})
+
+	} catch (error) {
+		/* res.status(500).send(error); */
+		console.error(error);
+		mongoClient.close();
+	}
+}, 15000);
+
 app.get("/participants", async (_, res) => {
 	try {
 		await mongoClient.connect();
@@ -20,6 +63,7 @@ app.get("/participants", async (_, res) => {
 
 		const participants = await db.collection("participants").find({}).toArray();
 
+		
 		res.send(participants);
 		mongoClient.close();
 	} catch (error) {
@@ -66,7 +110,7 @@ app.post("/participants", async (req, res) => {
 			time: dayjs().locale("pt-br").format("HH:mm:ss"),
 		});
 
-		removeInactiveUsers();
+		
 		res.sendStatus(201);
 		mongoClient.close();
 
@@ -224,49 +268,6 @@ app.put("/messages/:idMsg", async (req, res) => {
 	}
 });
 
-function removeInactiveUsers() {
-	setInterval(async () => {
-		try {
-			await mongoClient.connect();
-			const db = mongoClient.db("chat_uol");
-
-			const users = await db.collection("participants").find({}).toArray();
-
-			if (!users) {
-				return;
-			}
-
-			users.forEach(async (user) => {
-				if ((Date.now() - parseInt(user.lastStatus)) > 10000) {
-					try {
-						await db.collection("participants").deleteOne({ name: user.name });
-
-						await db.collection("messages").insertOne({
-							from: user.name,
-							to: "Todos",
-							text: "saiu na sala...",
-							type: "status",
-							time: dayjs().locale("pt-br").format("HH:mm:ss"),
-						});
-
-						mongoClient.close();
-
-					} catch (error) {
-						/* res.status(400).send(error); */
-						console.error(error);
-						mongoClient.close();
-					}
-				}
-			})
-
-		} catch (error) {
-			res.status(500).send(error);
-			console.error(error);
-			mongoClient.close();
-		}
-	}, 15000);
-}
-
 function removeTags(str) {
 	if ((str===null) || (str===''))
 			return false;
@@ -275,5 +276,8 @@ function removeTags(str) {
 	return str.replace( /(<([^>]+)>)/ig, '');
 }
 
-
-app.listen(5000);
+app.listen(5000, () => {
+  console.log(
+    chalk.hex('#00ffff').bold("Server is running on: http://localhost:5000")
+  );
+});
